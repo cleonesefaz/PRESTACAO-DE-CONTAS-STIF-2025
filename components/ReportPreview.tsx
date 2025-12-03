@@ -1,11 +1,11 @@
 
 import React from 'react';
-import { SectorConfig, ReportEntry } from '../types';
-import { STRATEGIC_ACTIONS } from '../constants';
+import { SectorConfig, ReportEntry, StrategicAction } from '../types';
 
 interface ReportPreviewProps {
-  sectors: SectorConfig[]; // Changed to accept an array of sectors
+  sectors: SectorConfig[];
   entries: ReportEntry[];
+  strategicActions: StrategicAction[];
 }
 
 interface EvidenceSummary {
@@ -15,9 +15,12 @@ interface EvidenceSummary {
   fileName: string;
 }
 
-export const ReportPreview: React.FC<ReportPreviewProps> = ({ sectors, entries }) => {
+export const ReportPreview: React.FC<ReportPreviewProps> = ({ sectors, entries, strategicActions }) => {
   const currentDate = new Date().toLocaleDateString('pt-BR');
   const isConsolidated = sectors.length > 1;
+
+  // Filter only active actions for the report, or should we show legacy? Usually only active.
+  const activeStrategicActions = strategicActions.filter(a => a.isActive !== false);
 
   // Helper to check if an entry is empty or marked as inactive
   const hasContent = (entry?: ReportEntry) => {
@@ -31,7 +34,7 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({ sectors, entries }
     const summary: EvidenceSummary[] = [];
     
     sectors.forEach(sector => {
-        STRATEGIC_ACTIONS.forEach(action => {
+        activeStrategicActions.forEach(action => {
             const entry = entries.find(e => e.actionId === action.id && e.sectorId === sector.id);
             if (hasContent(entry)) {
                 entry?.deliveries.forEach(delivery => {
@@ -87,7 +90,7 @@ export const ReportPreview: React.FC<ReportPreviewProps> = ({ sectors, entries }
                 </div>
 
                 <div className="space-y-10">
-                    {STRATEGIC_ACTIONS.map((action) => {
+                    {activeStrategicActions.map((action) => {
                         const entry = sectorEntries.find(e => e.actionId === action.id);
                         
                         // Skip inactive or empty actions

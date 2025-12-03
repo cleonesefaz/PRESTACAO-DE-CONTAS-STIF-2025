@@ -45,48 +45,63 @@ export const STRATEGIC_ACTIONS: StrategicAction[] = [
     id: "1",
     action: "Modernizar os sistemas e automações (WS)",
     description: "Implementar um plano de ação para convergir as plataformas atuais para a plataforma adotada.",
-    startDate: "Jan/2023",
-    endDate: "Dez/2025",
-    responsible: "SID/STIF"
+    startYear: 2023,
+    endYear: 2025,
+    responsible: "SID/STIF",
+    isActive: true
   },
   {
     id: "2",
     action: "Aquisição de Parque Tecnológico",
     description: "A Secretaria da Fazenda criou a Superintendência de Integração e Desenvolvimento... visando a reformulação de processos, recursos humanos, infraestrutura e serviços de TIC.",
-    startDate: "Jan/2023",
-    endDate: "Dez/2025",
-    responsible: "SID/STIF"
+    startYear: 2023,
+    endYear: 2025,
+    responsible: "SID/STIF",
+    isActive: true
   },
   {
     id: "3",
     action: "Elaborar e implementar um plano de sustentabilidade de TIC da SEFAZ",
     description: "Assegurar a operação ininterrupta dos sistemas com alta disponibilidade, ampliando os serviços à população... equipe dedicada... ambiente hiperconvergente.",
-    startDate: "Jan/2023",
-    endDate: "Dez/2025",
-    responsible: "SID/STIF"
+    startYear: 2023,
+    endYear: 2025,
+    responsible: "SID/STIF",
+    isActive: true
   },
   {
     id: "4",
     action: "Definir padrões e normatização dos sistemas de informações",
     description: "Implementar padrões e normativos com base nos diagnósticos.",
-    startDate: "Jan/2023",
-    endDate: "Dez/2025",
-    responsible: "SID/STIF"
+    startYear: 2023,
+    endYear: 2025,
+    responsible: "SID/STIF",
+    isActive: true
   },
   {
     id: "5",
     action: "Elaborar e implementar o plano diretor da TI da SEFAZ",
     description: "Implementar um plano de ações voltadas para as áreas de pessoal, infraestrutura, processos, normas e gestão de recursos na TIC.",
-    startDate: "Fev/2023",
-    endDate: "Dez/2025",
-    responsible: "SID/STIF"
+    startYear: 2023,
+    endYear: 2025,
+    responsible: "SID/STIF",
+    isActive: true
   },
   {
     id: "6",
     action: "Melhoria dos redesenhos e automatização os processos da SEFAZ",
     description: "Atualizar e melhorar o redesenho de processos existentes e automatizando para homologação e produção.",
-    startDate: "Jan/2023",
-    endDate: "Dez/2025",
-    responsible: "SID/STIF"
+    startYear: 2023,
+    endYear: 2025,
+    responsible: "SID/STIF",
+    isActive: true
+  },
+  {
+    id: "0",
+    action: "Ação Legada Exemplo (Histórico)",
+    description: "Esta ação existiu apenas no ciclo anterior e deve aparecer como inativa/histórico.",
+    startYear: 2020,
+    endYear: 2022,
+    responsible: "SID/STIF",
+    isActive: false
   }
 ];

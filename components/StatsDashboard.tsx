@@ -1,15 +1,15 @@
 
 import React, { useMemo } from 'react';
-import { ReportEntry } from '../types';
-import { STRATEGIC_ACTIONS } from '../constants';
+import { ReportEntry, StrategicAction } from '../types';
 import { Trophy, TrendingUp } from 'lucide-react';
 
 interface StatsDashboardProps {
   reportData: ReportEntry[];
   activeSectorId: string; // Changed from SectorId to string to support 'OVERVIEW'
+  strategicActions: StrategicAction[];
 }
 
-export const StatsDashboard: React.FC<StatsDashboardProps> = ({ reportData, activeSectorId }) => {
+export const StatsDashboard: React.FC<StatsDashboardProps> = ({ reportData, activeSectorId, strategicActions }) => {
   
   // 1. Calculate Statistics
   const stats = useMemo(() => {
@@ -25,31 +25,22 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({ reportData, acti
         return acc + (entry.deliveries ? entry.deliveries.length : 0);
     }, 0);
 
+    // Filter active strategic actions based on isActive flag
+    const activeStrategicActions = strategicActions.filter(a => a.isActive !== false);
+
     // KPI 2: Coverage (Active Actions vs Total)
-    // In OVERVIEW mode, we are looking at the aggregate coverage across the organization?
-    // Or average coverage? Let's assume coverage means "Actions that have received ANY attention across the scope".
-    
     let totalPossibleActions = 0;
     let activeActionsCount = 0;
 
     if (activeSectorId === 'OVERVIEW') {
-        // In overview, we might want to know total actions across ALL sectors?
-        // Or just how many of the 6 Strategic Actions have been addressed by AT LEAST one sector?
-        // Let's go with: How many actions have progress in the current scope.
-        
-        // Simpler metric for overview: Sum of active entries vs Sum of required entries (6 * num_sectors)
-        // This gives a sense of "Global Compliance"
-        // Assuming 5 sectors * 6 actions = 30 total slots.
-        const numberOfSectors = 5; // Fixed based on constants
-        totalPossibleActions = STRATEGIC_ACTIONS.length * numberOfSectors;
+        const numberOfSectors = 5; // Fixed assumption or could be dynamic passed via props
+        totalPossibleActions = activeStrategicActions.length * numberOfSectors;
         
         // Count all entries in reportData that are active (hasActivities !== false)
         activeActionsCount = entriesToAnalyze.filter(e => e.hasActivities !== false).length;
-        
-        // Note: This logic assumes that if an entry is missing from reportData, it's "Pending" (not active yet)
     } else {
-        totalPossibleActions = STRATEGIC_ACTIONS.length;
-        activeActionsCount = STRATEGIC_ACTIONS.reduce((acc, action) => {
+        totalPossibleActions = activeStrategicActions.length;
+        activeActionsCount = activeStrategicActions.reduce((acc, action) => {
             const entry = entriesToAnalyze.find(e => e.actionId === action.id);
             if (!entry) return acc; // Not started
             if (entry.hasActivities === false) return acc; // Explicitly inactive
@@ -98,7 +89,7 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({ reportData, acti
         months,
         maxMonthly
     };
-  }, [reportData, activeSectorId]);
+  }, [reportData, activeSectorId, strategicActions]);
 
   // Donut Chart Helpers
   const radius = 30;

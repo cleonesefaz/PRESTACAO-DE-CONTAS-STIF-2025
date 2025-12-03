@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { SECTORS as INITIAL_SECTORS, STRATEGIC_ACTIONS } from './constants';
-import { SectorId, ReportEntry, SectorConfig, AppConfig } from './types';
+import { SECTORS as INITIAL_SECTORS, STRATEGIC_ACTIONS as INITIAL_STRATEGIC_ACTIONS } from './constants';
+import { SectorId, ReportEntry, SectorConfig, AppConfig, StrategicAction } from './types';
 import { Header } from './components/Header';
 import { ActionCard } from './components/ActionCard';
 import { ActionDrawer } from './components/ActionDrawer';
@@ -25,6 +25,9 @@ const App: React.FC = () => {
   // Sectors (Dynamic List)
   const [sectors, setSectors] = useState<SectorConfig[]>(INITIAL_SECTORS);
 
+  // Strategic Actions (Dynamic List) - NEW
+  const [strategicActions, setStrategicActions] = useState<StrategicAction[]>(INITIAL_STRATEGIC_ACTIONS);
+
   // Navigation & Data
   const [activeSectorId, setActiveSectorId] = useState<string>('OVERVIEW');
   const [reportData, setReportData] = useState<ReportEntry[]>([]);
@@ -39,13 +42,16 @@ const App: React.FC = () => {
 
   const isReadOnly = selectedYear < 2025;
 
-  // Load Config & Sectors from LocalStorage (Once on mount)
+  // Load Config, Sectors & Actions from LocalStorage (Once on mount)
   useEffect(() => {
     const savedConfig = localStorage.getItem('stif_config');
     if (savedConfig) setAppConfig(JSON.parse(savedConfig));
 
     const savedSectors = localStorage.getItem('stif_sectors');
     if (savedSectors) setSectors(JSON.parse(savedSectors));
+
+    const savedActions = localStorage.getItem('stif_actions');
+    if (savedActions) setStrategicActions(JSON.parse(savedActions));
   }, []);
 
   // Persist Config
@@ -58,6 +64,12 @@ const App: React.FC = () => {
   const handleUpdateSectors = (newSectors: SectorConfig[]) => {
       setSectors(newSectors);
       localStorage.setItem('stif_sectors', JSON.stringify(newSectors));
+  };
+
+  // Persist Strategic Actions - NEW
+  const handleUpdateStrategicActions = (newActions: StrategicAction[]) => {
+      setStrategicActions(newActions);
+      localStorage.setItem('stif_actions', JSON.stringify(newActions));
   };
 
   // Load Report Data based on Year
@@ -103,8 +115,21 @@ const App: React.FC = () => {
       setTimeout(() => setSelectedActionId(null), 300);
   };
 
+  // Filter active actions based on the selected year or general "active" flag
+  // For the dashboard and cards, we probably want to show actions valid for the selected year.
+  const relevantStrategicActions = useMemo(() => {
+      return strategicActions.filter(action => {
+          // If action has explicit year range, check if selectedYear is within range
+          if (action.startYear && action.endYear) {
+              return selectedYear >= action.startYear && selectedYear <= action.endYear;
+          }
+          // Fallback to isActive flag if no years (or data migration)
+          return action.isActive !== false;
+      });
+  }, [strategicActions, selectedYear]);
+
   const calculateSectorProgress = (secId: string) => {
-    const completed = STRATEGIC_ACTIONS.reduce((acc, action) => {
+    const completed = relevantStrategicActions.reduce((acc, action) => {
         const entry = reportData.find(e => e.actionId === action.id && e.sectorId === secId);
         if (!entry) return acc;
         if (entry.hasActivities === false) return acc + 1;
@@ -114,8 +139,8 @@ const App: React.FC = () => {
     
     return {
         completed,
-        total: STRATEGIC_ACTIONS.length,
-        percentage: Math.round((completed / STRATEGIC_ACTIONS.length) * 100)
+        total: relevantStrategicActions.length,
+        percentage: relevantStrategicActions.length > 0 ? Math.round((completed / relevantStrategicActions.length) * 100) : 0
     };
   };
 
@@ -136,14 +161,14 @@ const App: React.FC = () => {
 
   // 2. Ranking per Strategic Action (New)
   const actionRankingData = useMemo(() => {
-      const data = STRATEGIC_ACTIONS.map(action => {
+      const data = relevantStrategicActions.map(action => {
           const totalDeliveries = reportData
             .filter(e => e.actionId === action.id && e.hasActivities !== false)
             .reduce((acc, curr) => acc + (curr.deliveries?.length || 0), 0);
           return { ...action, totalDeliveries };
       });
       return data.sort((a, b) => b.totalDeliveries - a.totalDeliveries);
-  }, [reportData]);
+  }, [reportData, relevantStrategicActions]);
 
   const maxActionDeliveryCount = Math.max(...actionRankingData.map(d => d.totalDeliveries)) || 1;
 
@@ -263,8 +288,10 @@ const App: React.FC = () => {
                 <SettingsDashboard 
                     config={appConfig}
                     sectors={sectors}
+                    strategicActions={strategicActions}
                     onUpdateConfig={handleUpdateConfig}
                     onUpdateSectors={handleUpdateSectors}
+                    onUpdateStrategicActions={handleUpdateStrategicActions}
                 />
             ) : (
                 <>
@@ -314,7 +341,11 @@ const App: React.FC = () => {
 
                     {/* Stats (Visible on Form Mode) */}
                     {viewMode === 'form' && (
-                        <StatsDashboard reportData={reportData} activeSectorId={activeSectorId} />
+                        <StatsDashboard 
+                            reportData={reportData} 
+                            activeSectorId={activeSectorId} 
+                            strategicActions={strategicActions} 
+                        />
                     )}
 
                     {/* Content Logic */}
@@ -367,7 +398,7 @@ const App: React.FC = () => {
                                     <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
                                         <CheckCircle2 size={20} className="text-gov-lightBlue"/> Volume por Ação Estratégica
                                     </h3>
-                                    <div className="space-y-4">
+                                    <div className="space-y-6">
                                         {actionRankingData.map((data, index) => {
                                             const percentage = (data.totalDeliveries / maxActionDeliveryCount) * 100;
                                             const barWidth = data.totalDeliveries > 0 ? `${percentage}%` : '4px';
@@ -375,21 +406,24 @@ const App: React.FC = () => {
                                             return (
                                                 <div 
                                                     key={data.id}
-                                                    className="w-full p-2 -mx-2 rounded-lg"
+                                                    className="w-full"
                                                 >
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-32 text-right flex-shrink-0">
-                                                            <span className="block font-medium text-gray-600 text-xs truncate" title={data.action}>
-                                                                {data.action}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex-1 relative h-8 bg-gray-100 rounded-md overflow-hidden flex items-center">
+                                                    {/* Label on Top */}
+                                                    <div className="mb-1">
+                                                        <span className="block font-medium text-gray-600 text-sm leading-tight line-clamp-2" title={data.action}>
+                                                            {data.action}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Bar Row */}
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex-1 relative h-6 bg-gray-100 rounded-md overflow-hidden">
                                                             <div 
-                                                                className={`h-full absolute left-0 top-0 rounded-r-md transition-all duration-1000 ease-out flex items-center justify-end pr-2 ${data.totalDeliveries === 0 ? 'bg-gray-200' : 'bg-gov-lightBlue'}`}
+                                                                className={`h-full absolute left-0 top-0 rounded-r-md transition-all duration-1000 ease-out ${data.totalDeliveries === 0 ? 'bg-gray-200' : 'bg-gov-lightBlue'}`}
                                                                 style={{ width: barWidth }}
                                                             ></div>
                                                         </div>
-                                                        <div className="w-8 text-left flex-shrink-0">
+                                                        <div className="w-8 text-right flex-shrink-0">
                                                             <span className={`text-lg font-bold ${data.totalDeliveries > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
                                                                 {data.totalDeliveries}
                                                             </span>
@@ -421,6 +455,7 @@ const App: React.FC = () => {
                                     <ReportPreview 
                                         sectors={activeSectors} 
                                         entries={reportData} 
+                                        strategicActions={strategicActions}
                                     />
                             </div>
                          )}
@@ -429,7 +464,7 @@ const App: React.FC = () => {
                         <>
                             {viewMode === 'form' ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-fr">
-                                    {STRATEGIC_ACTIONS.map(action => (
+                                    {relevantStrategicActions.map(action => (
                                         <ActionCard 
                                             key={action.id} 
                                             action={action} 
@@ -455,6 +490,7 @@ const App: React.FC = () => {
                                         <ReportPreview 
                                             sectors={[currentSector]} 
                                             entries={reportData.filter(e => e.sectorId === activeSectorId)} 
+                                            strategicActions={strategicActions}
                                         />
                                     )}
                                 </div>
@@ -469,7 +505,7 @@ const App: React.FC = () => {
       <ActionDrawer 
         isOpen={isDrawerOpen}
         onClose={handleCloseDrawer}
-        action={selectedActionId ? STRATEGIC_ACTIONS.find(a => a.id === selectedActionId) || null : null}
+        action={selectedActionId ? strategicActions.find(a => a.id === selectedActionId) || null : null}
         sectorId={activeSectorId as SectorId}
         data={selectedActionId ? reportData.find(e => e.actionId === selectedActionId && e.sectorId === activeSectorId) : undefined}
         onSave={handleSaveEntry}

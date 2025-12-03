@@ -1,22 +1,26 @@
 
 import React, { useState, useRef } from 'react';
-import { AppConfig, SectorConfig } from '../types';
-import { Save, Upload, GripVertical, Edit2, Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon } from 'lucide-react';
+import { AppConfig, SectorConfig, StrategicAction } from '../types';
+import { Save, Upload, GripVertical, Edit2, Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, Archive, CheckCircle } from 'lucide-react';
 
 interface SettingsDashboardProps {
   config: AppConfig;
   sectors: SectorConfig[];
+  strategicActions?: StrategicAction[]; // Optional for backward compat, but used
   onUpdateConfig: (newConfig: AppConfig) => void;
   onUpdateSectors: (newSectors: SectorConfig[]) => void;
+  onUpdateStrategicActions?: (newActions: StrategicAction[]) => void;
 }
 
 export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
   config,
   sectors,
+  strategicActions = [],
   onUpdateConfig,
-  onUpdateSectors
+  onUpdateSectors,
+  onUpdateStrategicActions
 }) => {
-  const [activeTab, setActiveTab] = useState<'identity' | 'sectors'>('sectors');
+  const [activeTab, setActiveTab] = useState<'identity' | 'sectors' | 'actions'>('sectors');
   
   // Local state for Config Form
   const [localConfig, setLocalConfig] = useState<AppConfig>(config);
@@ -25,6 +29,11 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
   const [isSectorModalOpen, setIsSectorModalOpen] = useState(false);
   const [editingSector, setEditingSector] = useState<SectorConfig | null>(null);
   const [sectorForm, setSectorForm] = useState<Partial<SectorConfig>>({});
+
+  // Local state for Strategic Action Modal
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [editingAction, setEditingAction] = useState<StrategicAction | null>(null);
+  const [actionForm, setActionForm] = useState<Partial<StrategicAction>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -97,6 +106,54 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
     setIsSectorModalOpen(false);
   };
 
+  // --- Strategic Action Handlers ---
+  const toggleActionStatus = (action: StrategicAction) => {
+      if (!onUpdateStrategicActions) return;
+      const updated = strategicActions.map(a => 
+          a.id === action.id ? { ...a, isActive: !a.isActive } : a
+      );
+      onUpdateStrategicActions(updated);
+  };
+
+  const openActionModal = (action?: StrategicAction) => {
+      if (action) {
+          setEditingAction(action);
+          setActionForm(action);
+      } else {
+          setEditingAction(null);
+          // Auto generate ID based on count
+          const nextId = (Math.max(...strategicActions.map(a => parseInt(a.id) || 0)) + 1).toString();
+          setActionForm({ 
+              id: nextId, 
+              isActive: true, 
+              startYear: 2025, 
+              endYear: 2028,
+              responsible: 'SID/STIF' 
+          });
+      }
+      setIsActionModalOpen(true);
+  };
+
+  const saveAction = () => {
+      if (!onUpdateStrategicActions) return;
+      if (!actionForm.action || !actionForm.description || !actionForm.id) {
+          alert('Preencha os campos obrigatórios');
+          return;
+      }
+
+      const newActionData = actionForm as StrategicAction;
+      let updatedActions = [...strategicActions];
+
+      if (editingAction) {
+          updatedActions = updatedActions.map(a => a.id === editingAction.id ? newActionData : a);
+      } else {
+          updatedActions.push(newActionData);
+      }
+
+      onUpdateStrategicActions(updatedActions);
+      setIsActionModalOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -125,6 +182,16 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
             }`}
           >
             Setores e Diretorias
+          </button>
+          <button
+            onClick={() => setActiveTab('actions')}
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'actions'
+                ? 'border-gov-blue text-gov-blue'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Ações Estratégicas (Metas)
           </button>
         </nav>
       </div>
@@ -300,6 +367,79 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
             </div>
           </div>
         )}
+
+        {/* TAB 3: STRATEGIC ACTIONS (METAS) */}
+        {activeTab === 'actions' && onUpdateStrategicActions && (
+          <div className="animate-fadeIn">
+            <div className="flex justify-end mb-4">
+                <button 
+                    onClick={() => openActionModal()}
+                    className="px-4 py-2 bg-gov-blue text-white rounded-lg hover:bg-blue-800 font-medium flex items-center gap-2 shadow-sm"
+                >
+                    <Plus size={18} /> Nova Ação Estratégica
+                </button>
+            </div>
+
+            <div className="overflow-hidden rounded-lg border border-gray-200">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-16">ID</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Ação / Meta</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-32">Vigência</th>
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Status</th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider w-24">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {strategicActions.map((action) => {
+                            const isExpired = action.endYear < 2025; // Simple check against current base year
+                            return (
+                                <tr key={action.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-600">
+                                        #{action.id}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <p className="text-sm font-medium text-gray-900 line-clamp-1">{action.action}</p>
+                                        <p className="text-xs text-gray-500 line-clamp-1">{action.description}</p>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                        <span className={`px-2 py-1 rounded text-xs font-bold border ${isExpired ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                                            {action.startYear} - {action.endYear}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <button 
+                                            onClick={() => toggleActionStatus(action)}
+                                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                                action.isActive !== false ? 'bg-green-500' : 'bg-gray-200'
+                                            }`}
+                                        >
+                                            <span
+                                                aria-hidden="true"
+                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                    action.isActive !== false ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button 
+                                            onClick={() => openActionModal(action)}
+                                            className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 p-2 rounded transition-colors"
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* Modal for Sector Edit/Create */}
@@ -372,6 +512,100 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
                 </div>
             </div>
         </div>
+      )}
+
+      {/* Modal for Strategic Action Edit/Create */}
+      {isActionModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                <h3 className="text-lg font-bold text-gray-800 mb-4">
+                    {editingAction ? 'Editar Ação Estratégica' : 'Nova Ação Estratégica'}
+                </h3>
+                
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID (Número)</label>
+                        <input 
+                            type="text" 
+                            value={actionForm.id || ''}
+                            onChange={e => setActionForm({...actionForm, id: e.target.value})}
+                            className="w-full p-2 border border-gray-300 rounded"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Título da Ação (Meta)</label>
+                        <textarea 
+                            value={actionForm.action || ''}
+                            onChange={e => setActionForm({...actionForm, action: e.target.value})}
+                            className="w-full p-2 border border-gray-300 rounded h-20 text-sm"
+                            placeholder="Ex: Modernizar a infraestrutura..."
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Descrição Detalhada</label>
+                        <textarea 
+                            value={actionForm.description || ''}
+                            onChange={e => setActionForm({...actionForm, description: e.target.value})}
+                            className="w-full p-2 border border-gray-300 rounded h-24 text-sm"
+                            placeholder="Descrição completa para o relatório..."
+                        />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ano Início</label>
+                            <select 
+                                value={actionForm.startYear || 2025}
+                                onChange={e => setActionForm({...actionForm, startYear: parseInt(e.target.value)})}
+                                className="w-full p-2 border border-gray-300 rounded"
+                            >
+                                {[2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028].map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ano Fim</label>
+                            <select 
+                                value={actionForm.endYear || 2025}
+                                onChange={e => setActionForm({...actionForm, endYear: parseInt(e.target.value)})}
+                                className="w-full p-2 border border-gray-300 rounded"
+                            >
+                                {[2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028].map(y => (
+                                    <option key={y} value={y}>{y}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2">
+                        <input 
+                            type="checkbox" 
+                            id="isActiveAction"
+                            checked={actionForm.isActive !== false}
+                            onChange={e => setActionForm({...actionForm, isActive: e.target.checked})}
+                            className="h-4 w-4 text-gov-blue rounded border-gray-300"
+                        />
+                        <label htmlFor="isActiveAction" className="text-sm text-gray-700 font-medium">Ação Ativa</label>
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                    <button 
+                        onClick={() => setIsActionModalOpen(false)}
+                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                    >
+                        Cancelar
+                    </button>
+                    <button 
+                        onClick={saveAction}
+                        className="px-4 py-2 bg-gov-blue text-white rounded hover:bg-blue-800"
+                    >
+                        Salvar
+                    </button>
+                </div>
+            </div>
+          </div>
       )}
 
     </div>

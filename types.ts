@@ -11,9 +11,10 @@ export interface StrategicAction {
   id: string;
   action: string;
   description: string;
-  startDate: string;
-  endDate: string;
+  startYear: number;
+  endYear: number;
   responsible: string; // Originally "SID", mapped to sectors
+  isActive?: boolean;
 }
 
 export interface DeliveryItem {
