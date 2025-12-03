@@ -1,6 +1,6 @@
 import React from 'react';
 import { StrategicAction, ReportEntry, SectorId } from '../types';
-import { ToggleLeft, ToggleRight, LayoutList, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { ToggleLeft, ToggleRight, LayoutList, CheckCircle2, AlertCircle, ArrowRight, Eye } from 'lucide-react';
 
 interface ActionCardProps {
   action: StrategicAction;
@@ -8,15 +8,18 @@ interface ActionCardProps {
   data?: ReportEntry;
   onSave: (data: ReportEntry) => void;
   onOpenDrawer: () => void;
+  readOnly?: boolean;
 }
 
-export const ActionCard: React.FC<ActionCardProps> = ({ action, sectorId, data, onSave, onOpenDrawer }) => {
+export const ActionCard: React.FC<ActionCardProps> = ({ action, sectorId, data, onSave, onOpenDrawer, readOnly = false }) => {
   // Default hasActivities to true if undefined, unless explicitly false
   const hasActivities = data?.hasActivities !== false; 
   const deliveriesCount = data?.deliveries?.length || 0;
 
   const toggleActivities = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent opening drawer when clicking toggle
+    if (readOnly) return;
+
     onSave({
       actionId: action.id,
       sectorId,
@@ -43,8 +46,9 @@ export const ActionCard: React.FC<ActionCardProps> = ({ action, sectorId, data, 
              
              <button 
                 onClick={toggleActivities}
-                className="focus:outline-none transition-transform active:scale-95 hover:scale-105"
-                title={hasActivities ? "Ativa em 2025" : "Sem atividades em 2025"}
+                className={`focus:outline-none transition-transform ${!readOnly && 'active:scale-95 hover:scale-105'} ${readOnly && 'cursor-not-allowed opacity-80'}`}
+                title={readOnly ? "Modo de leitura (Alteração bloqueada)" : (hasActivities ? "Ativa em 2025" : "Sem atividades em 2025")}
+                disabled={readOnly}
             >
                 {hasActivities ? (
                     <ToggleRight size={28} className="text-green-500" />
@@ -93,10 +97,14 @@ export const ActionCard: React.FC<ActionCardProps> = ({ action, sectorId, data, 
                     : 'bg-transparent text-gray-500 hover:text-gray-700 hover:underline'}
             `}
         >
-            {hasActivities ? (
-                <>Gerenciar Entregas <ArrowRight size={16} /></>
+            {readOnly ? (
+                 <>Ver Detalhes <Eye size={16} /></>
             ) : (
-                <>Ver Detalhes</>
+                hasActivities ? (
+                    <>Gerenciar Entregas <ArrowRight size={16} /></>
+                ) : (
+                    <>Ver Detalhes</>
+                )
             )}
         </button>
       </div>

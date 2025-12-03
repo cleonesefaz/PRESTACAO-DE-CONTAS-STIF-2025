@@ -27,7 +27,7 @@ export interface DeliveryItem {
 
 export interface ReportEntry {
   actionId: string;
-  sectorId: SectorId;
+  sectorId: SectorId | string;
   deliveries: DeliveryItem[];
   hasActivities: boolean; // Controla se houve ou não atividade no ano
   lastUpdated: number;
@@ -42,9 +42,17 @@ export interface AttachedFile {
 }
 
 export interface SectorConfig {
-  id: SectorId;
+  id: string; // Changed from SectorId enum to string to allow dynamic IDs
   name: string;
   shortName: string;
   color: string;
   subDepartments?: string[];
+  isActive?: boolean; // New field for soft delete/hiding
+}
+
+export interface AppConfig {
+  institutionName: string; // e.g. "Governo do Estado do Tocantins"
+  departmentName: string; // e.g. "Secretaria da Fazenda"
+  subDepartmentName: string; // e.g. "Superintendência de Tecnologia..."
+  logoUrl?: string; // Base64 or URL
 }

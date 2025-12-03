@@ -1,52 +1,97 @@
 
-import React, { useState, useEffect } from 'react';
-import { SECTORS, STRATEGIC_ACTIONS } from './constants';
-import { SectorId, ReportEntry } from './types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { SECTORS as INITIAL_SECTORS, STRATEGIC_ACTIONS } from './constants';
+import { SectorId, ReportEntry, SectorConfig, AppConfig } from './types';
 import { Header } from './components/Header';
 import { ActionCard } from './components/ActionCard';
 import { ActionDrawer } from './components/ActionDrawer';
 import { ReportPreview } from './components/ReportPreview';
 import { StatsDashboard } from './components/StatsDashboard';
-import { Printer, LayoutDashboard, FileEdit, CheckCircle2, BarChart3, ArrowRight } from 'lucide-react';
+import { SettingsDashboard } from './components/SettingsDashboard';
+import { Printer, LayoutDashboard, FileEdit, CheckCircle2, BarChart3, ArrowRight, ChevronRight, History, Settings } from 'lucide-react';
+
+const DEFAULT_CONFIG: AppConfig = {
+    institutionName: 'Governo do Estado do Tocantins',
+    departmentName: 'Secretaria da Fazenda',
+    subDepartmentName: 'Superintendência de Tecnologia e Inovação Fazendária'
+};
 
 const App: React.FC = () => {
-  // activeSectorId can be a SectorId enum OR 'OVERVIEW' string
+  // --- STATE MANAGEMENT ---
+  
+  // App Configuration (Identity)
+  const [appConfig, setAppConfig] = useState<AppConfig>(DEFAULT_CONFIG);
+  
+  // Sectors (Dynamic List)
+  const [sectors, setSectors] = useState<SectorConfig[]>(INITIAL_SECTORS);
+
+  // Navigation & Data
   const [activeSectorId, setActiveSectorId] = useState<string>('OVERVIEW');
   const [reportData, setReportData] = useState<ReportEntry[]>([]);
-  const [viewMode, setViewMode] = useState<'form' | 'preview'>('form');
+  const [viewMode, setViewMode] = useState<'form' | 'preview' | 'settings'>('form');
   
-  // Drawer State
+  // Context
+  const [selectedYear, setSelectedYear] = useState<number>(2025);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
 
-  // Load from local storage on mount
+  // --- LOGIC ---
+
+  const isReadOnly = selectedYear < 2025;
+
+  // Load Config & Sectors from LocalStorage (Once on mount)
   useEffect(() => {
-    const saved = localStorage.getItem('stif_report_2025_v2'); 
+    const savedConfig = localStorage.getItem('stif_config');
+    if (savedConfig) setAppConfig(JSON.parse(savedConfig));
+
+    const savedSectors = localStorage.getItem('stif_sectors');
+    if (savedSectors) setSectors(JSON.parse(savedSectors));
+  }, []);
+
+  // Persist Config
+  const handleUpdateConfig = (newConfig: AppConfig) => {
+      setAppConfig(newConfig);
+      localStorage.setItem('stif_config', JSON.stringify(newConfig));
+  };
+
+  // Persist Sectors
+  const handleUpdateSectors = (newSectors: SectorConfig[]) => {
+      setSectors(newSectors);
+      localStorage.setItem('stif_sectors', JSON.stringify(newSectors));
+  };
+
+  // Load Report Data based on Year
+  useEffect(() => {
+    const storageKey = `stif_report_${selectedYear}_v2`;
+    const saved = localStorage.getItem(storageKey); 
     if (saved) {
       try {
         setReportData(JSON.parse(saved));
       } catch (e) {
         console.error("Failed to parse saved data", e);
+        setReportData([]);
       }
+    } else {
+        setReportData([]);
     }
-  }, []);
+  }, [selectedYear]);
 
-  // Save to local storage on change
+  // Save Report Data
   useEffect(() => {
-    localStorage.setItem('stif_report_2025_v2', JSON.stringify(reportData));
-  }, [reportData]);
+    const storageKey = `stif_report_${selectedYear}_v2`;
+    localStorage.setItem(storageKey, JSON.stringify(reportData));
+  }, [reportData, selectedYear]);
 
   const handleSaveEntry = (entry: ReportEntry) => {
+    if (isReadOnly) return;
     setReportData(prev => {
-      // Remove existing entry for this action+sector and add new one
       const filtered = prev.filter(e => !(e.actionId === entry.actionId && e.sectorId === entry.sectorId));
       return [...filtered, entry];
     });
   };
 
-  // Identify current context (Overview or specific sector)
   const isOverview = activeSectorId === 'OVERVIEW';
-  const currentSector = SECTORS.find(s => s.id === activeSectorId);
+  const currentSector = sectors.find(s => s.id === activeSectorId);
 
   const handleOpenDrawer = (actionId: string) => {
       setSelectedActionId(actionId);
@@ -55,23 +100,15 @@ const App: React.FC = () => {
 
   const handleCloseDrawer = () => {
       setIsDrawerOpen(false);
-      setTimeout(() => setSelectedActionId(null), 300); // Wait for animation
+      setTimeout(() => setSelectedActionId(null), 300);
   };
 
-  // Helper to calculate progress for a specific sector
   const calculateSectorProgress = (secId: string) => {
     const completed = STRATEGIC_ACTIONS.reduce((acc, action) => {
         const entry = reportData.find(e => e.actionId === action.id && e.sectorId === secId);
-        
-        // No entry = not done
         if (!entry) return acc;
-        
-        // Inactive = done (compliant)
         if (entry.hasActivities === false) return acc + 1;
-        
-        // Active with deliveries = done
         if (entry.deliveries && entry.deliveries.length > 0) return acc + 1;
-        
         return acc;
     }, 0);
     
@@ -82,24 +119,59 @@ const App: React.FC = () => {
     };
   };
 
-  // Progress for Sidebar (Current active sector or N/A for Overview)
-  const currentProgress = !isOverview ? calculateSectorProgress(activeSectorId) : null;
+  const rankingData = useMemo(() => {
+    const data = sectors
+        .filter(s => s.isActive !== false) // Only active sectors in ranking
+        .map(sector => {
+            const totalDeliveries = reportData
+                .filter(e => e.sectorId === sector.id && e.hasActivities !== false)
+                .reduce((acc, curr) => acc + (curr.deliveries?.length || 0), 0);
+            return { ...sector, totalDeliveries };
+        });
+    return data.sort((a, b) => b.totalDeliveries - a.totalDeliveries);
+  }, [reportData, sectors]);
+
+  const maxDeliveryCount = Math.max(...rankingData.map(d => d.totalDeliveries)) || 1;
+  const currentProgress = !isOverview && activeSectorId !== 'SETTINGS' ? calculateSectorProgress(activeSectorId) : null;
+
+  // Handler for Sidebar Navigation
+  const handleNavClick = (target: string) => {
+      setActiveSectorId(target);
+      if (target === 'SETTINGS') {
+          setViewMode('settings');
+      } else {
+          setViewMode('form');
+      }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans flex flex-col">
-      <Header />
+      <Header selectedYear={selectedYear} onYearChange={setSelectedYear} config={appConfig} />
+
+      {isReadOnly && (
+        <div className="bg-amber-100 border-b border-amber-200 text-amber-800 px-4 py-2 text-sm text-center font-medium flex items-center justify-center gap-2 no-print">
+            <History size={16} />
+            <span>Visualizando Histórico: Exercício de {selectedYear} (Encerrado). O sistema está em modo somente leitura.</span>
+        </div>
+      )}
+
+      {selectedYear > 2025 && (
+        <div className="bg-blue-50 border-b border-blue-200 text-blue-800 px-4 py-2 text-sm text-center font-medium flex items-center justify-center gap-2 no-print">
+            <FileEdit size={16} />
+            <span>Modo de Planejamento: Exercício de {selectedYear}. As informações inseridas aqui são provisórias.</span>
+        </div>
+      )}
 
       <main className="flex-1 container mx-auto px-4 py-8 flex flex-col lg:flex-row gap-6 relative">
         
         {/* Sidebar Navigation */}
-        <aside className="w-full lg:w-64 flex-shrink-0 no-print">
+        <aside className="w-full lg:w-64 flex-shrink-0 no-print flex flex-col gap-6">
           <div className="bg-white rounded-lg shadow-sm p-4 sticky top-6">
             
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Painel de Controle</h3>
             
-            {/* Overview Link */}
             <button
-                onClick={() => setActiveSectorId('OVERVIEW')}
+                onClick={() => handleNavClick('OVERVIEW')}
                 className={`w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center justify-between mb-4 ${
                 isOverview
                     ? 'bg-gov-blue text-white shadow-md' 
@@ -117,13 +189,10 @@ const App: React.FC = () => {
 
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Setores / Diretorias</h3>
             <nav className="space-y-1">
-              {SECTORS.map(sector => (
+              {sectors.filter(s => s.isActive !== false).map(sector => (
                 <button
                   key={sector.id}
-                  onClick={() => {
-                      setActiveSectorId(sector.id);
-                      setViewMode('form'); // Reset to form view when switching
-                  }}
+                  onClick={() => handleNavClick(sector.id)}
                   className={`w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center justify-between ${
                     activeSectorId === sector.id 
                       ? `${sector.color} text-white shadow-md` 
@@ -136,13 +205,11 @@ const App: React.FC = () => {
               ))}
             </nav>
 
-            {/* Sidebar Progress (Hidden in Overview) */}
-            {!isOverview && currentProgress && (
+            {!isOverview && activeSectorId !== 'SETTINGS' && currentProgress && (
                 <div className="mt-8 pt-6 border-t border-gray-100">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Progresso do Setor</h3>
                     <div className="flex items-center justify-between text-sm mb-1">
                         <span className="font-semibold text-gray-700">{currentProgress.percentage}% Completo</span>
-                        <span className="text-gray-500">{currentProgress.completed}/{currentProgress.total} Ações</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                         <div 
@@ -150,171 +217,164 @@ const App: React.FC = () => {
                             style={{ width: `${currentProgress.percentage}%` }}
                         ></div>
                     </div>
-                    {currentProgress.percentage === 100 && (
-                        <div className="flex items-center gap-1 text-xs text-green-600 font-bold bg-green-50 p-2 rounded justify-center">
-                            <CheckCircle2 size={12} /> Dados completos!
-                        </div>
-                    )}
                 </div>
             )}
+            
+            <div className="mt-8 pt-4 border-t border-gray-200">
+                 <button
+                    onClick={() => handleNavClick('SETTINGS')}
+                    className={`w-full text-left px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                        activeSectorId === 'SETTINGS'
+                          ? 'bg-gray-800 text-white shadow-md'
+                          : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
+                    }`}
+                 >
+                    <Settings size={18} />
+                    <span>Configurações</span>
+                 </button>
+            </div>
+
           </div>
         </aside>
 
         {/* Main Content Area */}
         <div className="flex-1">
-            {/* Toolbar */}
-            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 no-print">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-800">
-                        {isOverview ? 'Superintendência de Tecnologia' : currentSector?.name}
-                    </h2>
-                    <p className="text-sm text-gray-500 mt-1">
-                        {isOverview 
-                            ? 'Monitoramento consolidado de todas as diretorias (STIF).'
-                            : 'Painel de gestão das ações estratégicas de 2025.'
-                        }
-                    </p>
-                </div>
-                
-                {/* View Switcher - Only available in Sector Mode */}
-                {!isOverview && (
-                    <div className="flex bg-white rounded-lg shadow-sm p-1">
-                        <button 
-                            onClick={() => setViewMode('form')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
-                                viewMode === 'form' ? 'bg-gov-lightBlue text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-                            }`}
-                        >
-                            <FileEdit size={16} /> Gestão
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('preview')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
-                                viewMode === 'preview' ? 'bg-gov-lightBlue text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-                            }`}
-                        >
-                            <LayoutDashboard size={16} /> Relatório Final
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Sub-departments Tag */}
-            {!isOverview && currentSector?.subDepartments && (
-                 <div className="flex flex-wrap gap-2 mb-6 no-print">
-                    {currentSector.subDepartments.map(sub => (
-                        <span key={sub} className="px-3 py-1 bg-white border border-gray-200 rounded-full text-xs text-gray-600 font-medium">
-                            {sub}
-                        </span>
-                    ))}
-                 </div>
-            )}
-
-            {/* Stats Dashboard (Dynamic Context) */}
-            {viewMode === 'form' && (
-                <StatsDashboard reportData={reportData} activeSectorId={activeSectorId} />
-            )}
-
-            {/* Content Area Switcher */}
-            {isOverview ? (
-                // OVERVIEW MODE: Summary Table
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                        <h3 className="font-bold text-gray-700">Resumo de Desempenho por Diretoria</h3>
-                        <span className="text-xs text-gray-500">Dados consolidados em tempo real</span>
-                    </div>
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-white text-gray-500 font-bold uppercase text-xs border-b border-gray-100">
-                            <tr>
-                                <th className="px-6 py-4">Diretoria / Setor</th>
-                                <th className="px-6 py-4">Progresso de Preenchimento</th>
-                                <th className="px-6 py-4 text-center">Entregas Totais</th>
-                                <th className="px-6 py-4 text-right">Ação</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {SECTORS.map(sector => {
-                                const prog = calculateSectorProgress(sector.id);
-                                const totalDeliveries = reportData
-                                    .filter(e => e.sectorId === sector.id && e.hasActivities !== false)
-                                    .reduce((acc, curr) => acc + (curr.deliveries?.length || 0), 0);
-
-                                return (
-                                    <tr key={sector.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-gray-800">{sector.shortName}</div>
-                                            <div className="text-xs text-gray-400">{sector.name}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex-1 h-2 bg-gray-100 rounded-full w-24">
-                                                    <div 
-                                                        className={`h-2 rounded-full ${prog.percentage === 100 ? 'bg-green-500' : 'bg-gov-yellow'}`}
-                                                        style={{ width: `${prog.percentage}%` }}
-                                                    ></div>
-                                                </div>
-                                                <span className="text-xs font-semibold text-gray-600 w-8">{prog.percentage}%</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <span className="bg-blue-50 text-gov-blue py-1 px-3 rounded-full font-bold text-xs">
-                                                {totalDeliveries}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button 
-                                                onClick={() => setActiveSectorId(sector.id)}
-                                                className="text-gov-lightBlue hover:text-gov-blue font-medium text-xs flex items-center justify-end gap-1 ml-auto group"
-                                            >
-                                                Detalhar <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+            
+            {/* View: SETTINGS */}
+            {viewMode === 'settings' ? (
+                <SettingsDashboard 
+                    config={appConfig}
+                    sectors={sectors}
+                    onUpdateConfig={handleUpdateConfig}
+                    onUpdateSectors={handleUpdateSectors}
+                />
             ) : (
-                // SECTOR MODE: Cards or Preview
                 <>
-                    {viewMode === 'form' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-fr">
-                            {STRATEGIC_ACTIONS.map(action => (
-                                <ActionCard 
-                                    key={action.id} 
-                                    action={action} 
-                                    sectorId={activeSectorId as SectorId}
-                                    data={reportData.find(e => e.actionId === action.id && e.sectorId === activeSectorId)}
-                                    onSave={handleSaveEntry}
-                                    onOpenDrawer={() => handleOpenDrawer(action.id)}
-                                />
-                            ))}
+                    {/* Header for Overview/Sectors */}
+                    <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 no-print">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800">
+                                {isOverview ? appConfig.subDepartmentName.split(' ')[0] : currentSector?.name}
+                            </h2>
+                            <p className="text-sm text-gray-500 mt-1">
+                                {isOverview 
+                                    ? `Monitoramento consolidado - ${selectedYear}`
+                                    : `Painel de gestão das ações estratégicas de ${selectedYear}.`
+                                }
+                            </p>
                         </div>
-                    ) : (
-                        <div className="bg-gray-300 p-8 rounded shadow-inner min-h-screen flex flex-col items-center">
-                            <div className="w-full max-w-[210mm] flex justify-end mb-4 no-print">
+                        
+                        {!isOverview && (
+                            <div className="flex bg-white rounded-lg shadow-sm p-1">
                                 <button 
-                                    onClick={() => window.print()}
-                                    className="bg-gov-blue hover:bg-blue-800 text-white px-4 py-2 rounded shadow flex items-center gap-2"
+                                    onClick={() => setViewMode('form')}
+                                    className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
+                                        viewMode === 'form' ? 'bg-gov-lightBlue text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+                                    }`}
                                 >
-                                    <Printer size={18} /> Imprimir / Salvar PDF
+                                    <FileEdit size={16} /> Gestão
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('preview')}
+                                    className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
+                                        viewMode === 'preview' ? 'bg-gov-lightBlue text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <LayoutDashboard size={16} /> Relatório
                                 </button>
                             </div>
-                            {currentSector && (
-                                <ReportPreview 
-                                    sector={currentSector} 
-                                    entries={reportData.filter(e => e.sectorId === activeSectorId)} 
-                                />
-                            )}
+                        )}
+                    </div>
+
+                    {/* Stats */}
+                    {viewMode === 'form' && (
+                        <StatsDashboard reportData={reportData} activeSectorId={activeSectorId} />
+                    )}
+
+                    {/* Content Logic */}
+                    {isOverview ? (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <h3 className="text-lg font-bold text-gray-800 mb-6">Comparativo de Entregas por Diretoria</h3>
+                            <div className="space-y-4">
+                                {rankingData.map((data, index) => {
+                                    const percentage = (data.totalDeliveries / maxDeliveryCount) * 100;
+                                    const barWidth = data.totalDeliveries > 0 ? `${percentage}%` : '4px';
+
+                                    return (
+                                        <button 
+                                            key={data.id}
+                                            onClick={() => handleNavClick(data.id)}
+                                            className="w-full group hover:bg-gray-50 p-2 -mx-2 rounded-lg transition-colors"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-24 text-right flex-shrink-0">
+                                                    <span className="block font-bold text-gray-700 text-sm group-hover:text-gov-blue transition-colors">
+                                                        {data.shortName}
+                                                    </span>
+                                                </div>
+                                                <div className="flex-1 relative h-10 bg-gray-100 rounded-md overflow-hidden flex items-center">
+                                                    <div 
+                                                        className={`h-full absolute left-0 top-0 rounded-r-md transition-all duration-1000 ease-out flex items-center justify-end pr-2 group-hover:brightness-95 ${data.totalDeliveries === 0 ? 'bg-gray-200' : 'bg-gov-blue'}`}
+                                                        style={{ width: barWidth }}
+                                                    ></div>
+                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                                                        <span className="text-[10px] bg-white/90 px-2 py-0.5 rounded shadow text-gov-blue font-bold flex items-center gap-1">
+                                                            Ver Detalhes <ChevronRight size={10} />
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="w-12 text-left flex-shrink-0">
+                                                    <span className={`text-xl font-bold ${data.totalDeliveries > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
+                                                        {data.totalDeliveries}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
+                    ) : (
+                        <>
+                            {viewMode === 'form' ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-fr">
+                                    {STRATEGIC_ACTIONS.map(action => (
+                                        <ActionCard 
+                                            key={action.id} 
+                                            action={action} 
+                                            sectorId={activeSectorId}
+                                            data={reportData.find(e => e.actionId === action.id && e.sectorId === activeSectorId)}
+                                            onSave={handleSaveEntry}
+                                            onOpenDrawer={() => handleOpenDrawer(action.id)}
+                                            readOnly={isReadOnly}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="bg-gray-300 p-8 rounded shadow-inner min-h-screen flex flex-col items-center">
+                                    <div className="w-full max-w-[210mm] flex justify-end mb-4 no-print">
+                                        <button 
+                                            onClick={() => window.print()}
+                                            className="bg-gov-blue hover:bg-blue-800 text-white px-4 py-2 rounded shadow flex items-center gap-2"
+                                        >
+                                            <Printer size={18} /> Imprimir / Salvar PDF
+                                        </button>
+                                    </div>
+                                    {currentSector && (
+                                        <ReportPreview 
+                                            sector={currentSector} 
+                                            entries={reportData.filter(e => e.sectorId === activeSectorId)} 
+                                        />
+                                    )}
+                                </div>
+                            )}
+                        </>
                     )}
                 </>
             )}
         </div>
       </main>
 
-      {/* Drawer Component */}
       <ActionDrawer 
         isOpen={isDrawerOpen}
         onClose={handleCloseDrawer}
@@ -322,16 +382,8 @@ const App: React.FC = () => {
         sectorId={activeSectorId as SectorId}
         data={selectedActionId ? reportData.find(e => e.actionId === selectedActionId && e.sectorId === activeSectorId) : undefined}
         onSave={handleSaveEntry}
+        readOnly={isReadOnly}
       />
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-6 mt-12 no-print">
-        <div className="container mx-auto px-4 text-center">
-            <p className="text-sm text-gray-500">
-                Sistema de Prestação de Contas SEFAZ/TO &copy; 2025
-            </p>
-        </div>
-      </footer>
     </div>
   );
 };

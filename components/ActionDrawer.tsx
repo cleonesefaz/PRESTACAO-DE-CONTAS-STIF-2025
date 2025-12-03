@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StrategicAction, ReportEntry, SectorId, DeliveryItem } from '../types';
-import { X, Plus, Calendar, FileText, Trash2, Edit2, AlertCircle, ChevronRight } from 'lucide-react';
+import { X, Plus, Calendar, FileText, Trash2, Edit2, AlertCircle, ChevronRight, Lock } from 'lucide-react';
 import { ActionDeliveryModal } from './ActionDeliveryModal';
 
 interface ActionDrawerProps {
@@ -10,6 +10,7 @@ interface ActionDrawerProps {
   sectorId: SectorId;
   data?: ReportEntry;
   onSave: (data: ReportEntry) => void;
+  readOnly?: boolean;
 }
 
 export const ActionDrawer: React.FC<ActionDrawerProps> = ({ 
@@ -18,7 +19,8 @@ export const ActionDrawer: React.FC<ActionDrawerProps> = ({
     action, 
     sectorId, 
     data, 
-    onSave 
+    onSave,
+    readOnly = false
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<DeliveryItem | undefined>(undefined);
@@ -29,11 +31,13 @@ export const ActionDrawer: React.FC<ActionDrawerProps> = ({
   const deliveries = data?.deliveries || [];
 
   const handleOpenModal = (item?: DeliveryItem) => {
+    if (readOnly) return;
     setEditingItem(item);
     setIsModalOpen(true);
   };
 
   const handleSaveItem = (item: DeliveryItem) => {
+    if (readOnly) return;
     let newDeliveries = [...deliveries];
     
     if (editingItem) {
@@ -54,6 +58,7 @@ export const ActionDrawer: React.FC<ActionDrawerProps> = ({
   };
 
   const handleDeleteItem = (id: string) => {
+    if (readOnly) return;
     if (confirm('Tem certeza que deseja excluir esta entrega?')) {
       const newDeliveries = deliveries.filter(d => d.id !== id);
       onSave({
@@ -78,15 +83,15 @@ export const ActionDrawer: React.FC<ActionDrawerProps> = ({
       <div className={`fixed inset-y-0 right-0 w-full md:w-2/3 lg:w-1/2 bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         
         {/* Drawer Header */}
-        <div className="bg-gov-blue text-white p-6 shadow-md flex justify-between items-start">
+        <div className={`text-white p-6 shadow-md flex justify-between items-start ${readOnly ? 'bg-gray-700' : 'bg-gov-blue'}`}>
             <div className="pr-8">
-                <span className="text-blue-200 text-xs font-bold uppercase tracking-wider mb-1 block">
-                    Gerenciando Ação Estratégica
+                <span className={`text-xs font-bold uppercase tracking-wider mb-1 block ${readOnly ? 'text-gray-300' : 'text-blue-200'}`}>
+                    {readOnly ? 'Visualização de Histórico' : 'Gerenciando Ação Estratégica'}
                 </span>
                 <h2 className="text-xl font-bold leading-tight">
                     {action.action}
                 </h2>
-                <div className="mt-2 text-blue-100 text-xs flex items-center gap-2">
+                <div className={`mt-2 text-xs flex items-center gap-2 ${readOnly ? 'text-gray-300' : 'text-blue-100'}`}>
                     <Calendar size={12} /> Vigência: {action.startDate} a {action.endDate}
                 </div>
             </div>
@@ -101,6 +106,18 @@ export const ActionDrawer: React.FC<ActionDrawerProps> = ({
         {/* Drawer Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
             
+            {readOnly && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+                    <Lock className="text-amber-600 mt-1 flex-shrink-0" size={18} />
+                    <div>
+                        <h4 className="font-bold text-amber-800 text-sm">Modo de Leitura</h4>
+                        <p className="text-amber-700 text-xs mt-1">
+                            Você está visualizando um registro de um ano encerrado. Não é possível adicionar, editar ou excluir entregas.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Reference Description */}
             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm mb-6">
                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Descrição Planejada (Meta)</h4>
@@ -112,7 +129,10 @@ export const ActionDrawer: React.FC<ActionDrawerProps> = ({
                      <AlertCircle size={48} className="text-gray-400 mb-4" />
                      <h3 className="text-lg font-semibold text-gray-600">Ação Inativa</h3>
                      <p className="text-sm text-gray-500 text-center max-w-xs mb-6">
-                        Você marcou esta ação como "Sem Atividades" em 2025. Para adicionar entregas, ative-a novamente no Dashboard.
+                        {readOnly 
+                            ? "Não houve atividades registradas para esta ação neste ano."
+                            : "Você marcou esta ação como \"Sem Atividades\". Para adicionar entregas, ative-a novamente no Dashboard."
+                        }
                      </p>
                 </div>
             ) : (
@@ -133,34 +153,40 @@ export const ActionDrawer: React.FC<ActionDrawerProps> = ({
                                     <FileText size={32} className="text-blue-300" />
                                 </div>
                                 <h4 className="text-gray-800 font-semibold mb-1">Nenhuma entrega cadastrada</h4>
-                                <p className="text-gray-500 text-sm mb-6">Registre os marcos importantes e projetos finalizados vinculados a esta ação.</p>
-                                <button 
-                                    onClick={() => handleOpenModal()}
-                                    className="bg-gov-blue text-white hover:bg-blue-800 px-6 py-2 rounded-lg text-sm font-medium transition-colors shadow-md"
-                                >
-                                    Adicionar Primeira Entrega
-                                </button>
+                                {!readOnly && (
+                                    <>
+                                        <p className="text-gray-500 text-sm mb-6">Registre os marcos importantes e projetos finalizados vinculados a esta ação.</p>
+                                        <button 
+                                            onClick={() => handleOpenModal()}
+                                            className="bg-gov-blue text-white hover:bg-blue-800 px-6 py-2 rounded-lg text-sm font-medium transition-colors shadow-md"
+                                        >
+                                            Adicionar Primeira Entrega
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         )}
 
                         {deliveries.map((item) => (
                             <div key={item.id} className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-all group relative">
-                                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-2">
-                                     <button 
-                                        onClick={() => handleOpenModal(item)}
-                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                                        title="Editar"
-                                    >
-                                        <Edit2 size={16} />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDeleteItem(item.id)}
-                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
+                                {!readOnly && (
+                                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white pl-2">
+                                        <button 
+                                            onClick={() => handleOpenModal(item)}
+                                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                            title="Editar"
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeleteItem(item.id)}
+                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                            title="Excluir"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                )}
 
                                 <div className="flex gap-4">
                                     <div className="flex flex-col items-center">
@@ -199,7 +225,7 @@ export const ActionDrawer: React.FC<ActionDrawerProps> = ({
         </div>
 
         {/* Drawer Footer (Floating Add Button if content exists) */}
-        {hasActivities && (
+        {hasActivities && !readOnly && (
             <div className="p-4 border-t border-gray-200 bg-white sticky bottom-0 z-10">
                  <button 
                     onClick={() => handleOpenModal()}
