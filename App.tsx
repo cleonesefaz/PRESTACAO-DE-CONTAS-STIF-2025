@@ -8,7 +8,7 @@ import { ActionDrawer } from './components/ActionDrawer';
 import { ReportPreview } from './components/ReportPreview';
 import { StatsDashboard } from './components/StatsDashboard';
 import { SettingsDashboard } from './components/SettingsDashboard';
-import { Printer, LayoutDashboard, FileEdit, CheckCircle2, BarChart3, ArrowRight, ChevronRight, History, Settings } from 'lucide-react';
+import { Printer, LayoutDashboard, FileEdit, CheckCircle2, BarChart3, ArrowRight, ChevronRight, History, Settings, FileDown, Eye } from 'lucide-react';
 
 const DEFAULT_CONFIG: AppConfig = {
     institutionName: 'Governo do Estado do Tocantins',
@@ -119,6 +119,7 @@ const App: React.FC = () => {
     };
   };
 
+  // 1. Ranking per Sector (Directory)
   const rankingData = useMemo(() => {
     const data = sectors
         .filter(s => s.isActive !== false) // Only active sectors in ranking
@@ -131,7 +132,21 @@ const App: React.FC = () => {
     return data.sort((a, b) => b.totalDeliveries - a.totalDeliveries);
   }, [reportData, sectors]);
 
-  const maxDeliveryCount = Math.max(...rankingData.map(d => d.totalDeliveries)) || 1;
+  const maxSectorDeliveryCount = Math.max(...rankingData.map(d => d.totalDeliveries)) || 1;
+
+  // 2. Ranking per Strategic Action (New)
+  const actionRankingData = useMemo(() => {
+      const data = STRATEGIC_ACTIONS.map(action => {
+          const totalDeliveries = reportData
+            .filter(e => e.actionId === action.id && e.hasActivities !== false)
+            .reduce((acc, curr) => acc + (curr.deliveries?.length || 0), 0);
+          return { ...action, totalDeliveries };
+      });
+      return data.sort((a, b) => b.totalDeliveries - a.totalDeliveries);
+  }, [reportData]);
+
+  const maxActionDeliveryCount = Math.max(...actionRankingData.map(d => d.totalDeliveries)) || 1;
+
   const currentProgress = !isOverview && activeSectorId !== 'SETTINGS' ? calculateSectorProgress(activeSectorId) : null;
 
   // Handler for Sidebar Navigation
@@ -143,6 +158,9 @@ const App: React.FC = () => {
           setViewMode('form');
       }
   };
+
+  // Get active sectors for consolidated report
+  const activeSectors = useMemo(() => sectors.filter(s => s.isActive !== false), [sectors]);
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans flex flex-col">
@@ -264,76 +282,149 @@ const App: React.FC = () => {
                             </p>
                         </div>
                         
-                        {!isOverview && (
-                            <div className="flex bg-white rounded-lg shadow-sm p-1">
-                                <button 
-                                    onClick={() => setViewMode('form')}
-                                    className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
-                                        viewMode === 'form' ? 'bg-gov-lightBlue text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    <FileEdit size={16} /> Gestão
-                                </button>
+                        {/* Action Buttons */}
+                        <div className="flex bg-white rounded-lg shadow-sm p-1">
+                             {isOverview ? (
                                 <button 
                                     onClick={() => setViewMode('preview')}
                                     className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
-                                        viewMode === 'preview' ? 'bg-gov-lightBlue text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+                                        viewMode === 'preview' 
+                                            ? 'bg-gov-blue text-white shadow-md' 
+                                            : 'bg-white text-gov-blue hover:bg-blue-50 border border-blue-200'
                                     }`}
                                 >
-                                    <LayoutDashboard size={16} /> Relatório
+                                    <FileDown size={18} /> Baixar Relatório Consolidado
                                 </button>
-                            </div>
-                        )}
+                             ) : (
+                                <>
+                                    <button 
+                                        onClick={() => setViewMode('preview')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all border ml-1 ${
+                                            viewMode === 'preview' 
+                                                ? 'bg-gov-lightBlue text-white shadow-sm border-transparent' 
+                                                : 'text-gray-500 border-gray-200 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <Eye size={16} /> Visualizar Prévia
+                                    </button>
+                                </>
+                             )}
+                        </div>
                     </div>
 
-                    {/* Stats */}
+                    {/* Stats (Visible on Form Mode) */}
                     {viewMode === 'form' && (
                         <StatsDashboard reportData={reportData} activeSectorId={activeSectorId} />
                     )}
 
                     {/* Content Logic */}
                     {isOverview ? (
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-lg font-bold text-gray-800 mb-6">Comparativo de Entregas por Diretoria</h3>
-                            <div className="space-y-4">
-                                {rankingData.map((data, index) => {
-                                    const percentage = (data.totalDeliveries / maxDeliveryCount) * 100;
-                                    const barWidth = data.totalDeliveries > 0 ? `${percentage}%` : '4px';
+                        <>
+                         {viewMode === 'form' ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Coluna Esquerda: Ranking Setores */}
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+                                        <BarChart3 size={20} className="text-gov-blue"/> Comparativo por Diretoria
+                                    </h3>
+                                    <div className="space-y-4">
+                                        {rankingData.map((data, index) => {
+                                            const percentage = (data.totalDeliveries / maxSectorDeliveryCount) * 100;
+                                            const barWidth = data.totalDeliveries > 0 ? `${percentage}%` : '4px';
 
-                                    return (
-                                        <button 
-                                            key={data.id}
-                                            onClick={() => handleNavClick(data.id)}
-                                            className="w-full group hover:bg-gray-50 p-2 -mx-2 rounded-lg transition-colors"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-24 text-right flex-shrink-0">
-                                                    <span className="block font-bold text-gray-700 text-sm group-hover:text-gov-blue transition-colors">
-                                                        {data.shortName}
-                                                    </span>
-                                                </div>
-                                                <div className="flex-1 relative h-10 bg-gray-100 rounded-md overflow-hidden flex items-center">
-                                                    <div 
-                                                        className={`h-full absolute left-0 top-0 rounded-r-md transition-all duration-1000 ease-out flex items-center justify-end pr-2 group-hover:brightness-95 ${data.totalDeliveries === 0 ? 'bg-gray-200' : 'bg-gov-blue'}`}
-                                                        style={{ width: barWidth }}
-                                                    ></div>
-                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                                                        <span className="text-[10px] bg-white/90 px-2 py-0.5 rounded shadow text-gov-blue font-bold flex items-center gap-1">
-                                                            Ver Detalhes <ChevronRight size={10} />
-                                                        </span>
+                                            return (
+                                                <button 
+                                                    key={data.id}
+                                                    onClick={() => handleNavClick(data.id)}
+                                                    className="w-full group hover:bg-gray-50 p-2 -mx-2 rounded-lg transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-20 text-right flex-shrink-0">
+                                                            <span className="block font-bold text-gray-700 text-sm group-hover:text-gov-blue transition-colors">
+                                                                {data.shortName}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex-1 relative h-8 bg-gray-100 rounded-md overflow-hidden flex items-center">
+                                                            <div 
+                                                                className={`h-full absolute left-0 top-0 rounded-r-md transition-all duration-1000 ease-out flex items-center justify-end pr-2 group-hover:brightness-95 ${data.totalDeliveries === 0 ? 'bg-gray-200' : 'bg-gov-blue'}`}
+                                                                style={{ width: barWidth }}
+                                                            ></div>
+                                                        </div>
+                                                        <div className="w-8 text-left flex-shrink-0">
+                                                            <span className={`text-lg font-bold ${data.totalDeliveries > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
+                                                                {data.totalDeliveries}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Coluna Direita: Volume por Ação */}
+                                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+                                        <CheckCircle2 size={20} className="text-gov-lightBlue"/> Volume por Ação Estratégica
+                                    </h3>
+                                    <div className="space-y-4">
+                                        {actionRankingData.map((data, index) => {
+                                            const percentage = (data.totalDeliveries / maxActionDeliveryCount) * 100;
+                                            const barWidth = data.totalDeliveries > 0 ? `${percentage}%` : '4px';
+
+                                            return (
+                                                <div 
+                                                    key={data.id}
+                                                    className="w-full p-2 -mx-2 rounded-lg"
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-32 text-right flex-shrink-0">
+                                                            <span className="block font-medium text-gray-600 text-xs truncate" title={data.action}>
+                                                                {data.action}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex-1 relative h-8 bg-gray-100 rounded-md overflow-hidden flex items-center">
+                                                            <div 
+                                                                className={`h-full absolute left-0 top-0 rounded-r-md transition-all duration-1000 ease-out flex items-center justify-end pr-2 ${data.totalDeliveries === 0 ? 'bg-gray-200' : 'bg-gov-lightBlue'}`}
+                                                                style={{ width: barWidth }}
+                                                            ></div>
+                                                        </div>
+                                                        <div className="w-8 text-left flex-shrink-0">
+                                                            <span className={`text-lg font-bold ${data.totalDeliveries > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
+                                                                {data.totalDeliveries}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="w-12 text-left flex-shrink-0">
-                                                    <span className={`text-xl font-bold ${data.totalDeliveries > 0 ? 'text-gray-800' : 'text-gray-300'}`}>
-                                                        {data.totalDeliveries}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                         ) : (
+                            // Render Consolidated Report
+                             <div className="bg-gray-300 p-8 rounded shadow-inner min-h-screen flex flex-col items-center">
+                                    <div className="w-full max-w-[210mm] flex justify-between mb-4 no-print">
+                                        <button 
+                                            onClick={() => setViewMode('form')}
+                                            className="text-gray-600 hover:text-gray-900 flex items-center gap-2"
+                                        >
+                                           &larr; Voltar
+                                        </button>
+                                        <button 
+                                            onClick={() => window.print()}
+                                            className="bg-gov-blue hover:bg-blue-800 text-white px-4 py-2 rounded shadow flex items-center gap-2 font-bold"
+                                        >
+                                            <Printer size={18} /> Imprimir Relatório Consolidado
+                                        </button>
+                                    </div>
+                                    <ReportPreview 
+                                        sectors={activeSectors} 
+                                        entries={reportData} 
+                                    />
+                            </div>
+                         )}
+                        </>
                     ) : (
                         <>
                             {viewMode === 'form' ? (
@@ -357,12 +448,12 @@ const App: React.FC = () => {
                                             onClick={() => window.print()}
                                             className="bg-gov-blue hover:bg-blue-800 text-white px-4 py-2 rounded shadow flex items-center gap-2"
                                         >
-                                            <Printer size={18} /> Imprimir / Salvar PDF
+                                            <Printer size={18} /> Imprimir Prévia (Rascunho)
                                         </button>
                                     </div>
                                     {currentSector && (
                                         <ReportPreview 
-                                            sector={currentSector} 
+                                            sectors={[currentSector]} 
                                             entries={reportData.filter(e => e.sectorId === activeSectorId)} 
                                         />
                                     )}
