@@ -51,9 +51,16 @@ export interface SectorConfig {
   isActive?: boolean; // New field for soft delete/hiding
 }
 
+export interface AppDeadlines {
+  sectorDeadline: string; // YYYY-MM-DD format
+  finalDeadline: string; // YYYY-MM-DD format
+  showBanner: boolean;
+}
+
 export interface AppConfig {
   institutionName: string; // e.g. "Governo do Estado do Tocantins"
   departmentName: string; // e.g. "Secretaria da Fazenda"
   subDepartmentName: string; // e.g. "Superintendência de Tecnologia..."
   logoUrl?: string; // Base64 or URL
+  deadlines: AppDeadlines;
 }

@@ -13,7 +13,12 @@ import { Printer, LayoutDashboard, FileEdit, CheckCircle2, BarChart3, ArrowRight
 const DEFAULT_CONFIG: AppConfig = {
     institutionName: 'Governo do Estado do Tocantins',
     departmentName: 'Secretaria da Fazenda',
-    subDepartmentName: 'Superintendência de Tecnologia e Inovação Fazendária'
+    subDepartmentName: 'Superintendência de Tecnologia e Inovação Fazendária',
+    deadlines: {
+        sectorDeadline: '2025-12-12',
+        finalDeadline: '2025-12-19',
+        showBanner: true
+    }
 };
 
 const App: React.FC = () => {
@@ -45,7 +50,7 @@ const App: React.FC = () => {
   // Load Config, Sectors & Actions from LocalStorage (Once on mount)
   useEffect(() => {
     const savedConfig = localStorage.getItem('stif_config');
-    if (savedConfig) setAppConfig(JSON.parse(savedConfig));
+    if (savedConfig) setAppConfig({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) }); // Merge to ensure deadlines exist
 
     const savedSectors = localStorage.getItem('stif_sectors');
     if (savedSectors) setSectors(JSON.parse(savedSectors));

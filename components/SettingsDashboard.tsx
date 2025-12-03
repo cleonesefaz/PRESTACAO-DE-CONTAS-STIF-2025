@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { AppConfig, SectorConfig, StrategicAction } from '../types';
-import { Save, Upload, GripVertical, Edit2, Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, Archive, CheckCircle } from 'lucide-react';
+import { Save, Upload, GripVertical, Edit2, Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, Archive, CheckCircle, Calendar, Clock, AlertTriangle } from 'lucide-react';
 
 interface SettingsDashboardProps {
   config: AppConfig;
@@ -20,7 +20,7 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
   onUpdateSectors,
   onUpdateStrategicActions
 }) => {
-  const [activeTab, setActiveTab] = useState<'identity' | 'sectors' | 'actions'>('sectors');
+  const [activeTab, setActiveTab] = useState<'identity' | 'sectors' | 'actions' | 'deadlines'>('sectors');
   
   // Local state for Config Form
   const [localConfig, setLocalConfig] = useState<AppConfig>(config);
@@ -51,7 +51,7 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
 
   const saveIdentity = () => {
     onUpdateConfig(localConfig);
-    alert('Identidade visual atualizada com sucesso!');
+    alert('Configurações salvas com sucesso!');
   };
 
   // --- Sector Handlers ---
@@ -174,6 +174,16 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
             Identidade Visual
           </button>
           <button
+            onClick={() => setActiveTab('deadlines')}
+            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              activeTab === 'deadlines'
+                ? 'border-gov-blue text-gov-blue'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Prazos e Ciclo
+          </button>
+          <button
             onClick={() => setActiveTab('sectors')}
             className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'sectors'
@@ -279,6 +289,103 @@ export const SettingsDashboard: React.FC<SettingsDashboardProps> = ({
                 </button>
             </div>
           </div>
+        )}
+
+        {/* TAB 4: DEADLINES (PRAZOS) */}
+        {activeTab === 'deadlines' && (
+            <div className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
+                 <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm">
+                    <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+                        <Clock className="text-gov-blue" /> Definição de Prazos Limites (Deadline)
+                    </h3>
+                    <p className="text-sm text-gray-500 mb-8">
+                        Configure as datas de encerramento do exercício. Estas datas controlam a exibição de alertas e o bloqueio automático de edições.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                         {/* Campo A */}
+                        <div className="space-y-2">
+                            <label className="block text-sm font-bold text-gray-700">Fim da Fase Setorial (Diretorias)</label>
+                            <div className="relative">
+                                <input 
+                                    type="date"
+                                    value={localConfig.deadlines?.sectorDeadline || ''}
+                                    onChange={(e) => setLocalConfig(prev => ({
+                                        ...prev,
+                                        deadlines: { ...prev.deadlines, sectorDeadline: e.target.value }
+                                    }))}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gov-lightBlue outline-none"
+                                />
+                                <Calendar size={18} className="absolute left-3 top-2.5 text-gray-400" />
+                            </div>
+                            <p className="text-xs text-gray-500">
+                                Data limite para os diretores registrarem atividades. Após esta data, o sistema pode bloquear novas edições.
+                            </p>
+                        </div>
+
+                         {/* Campo B */}
+                         <div className="space-y-2">
+                            <label className="block text-sm font-bold text-gray-700">Entrega Final (Superintendência)</label>
+                            <div className="relative">
+                                <input 
+                                    type="date"
+                                    value={localConfig.deadlines?.finalDeadline || ''}
+                                    onChange={(e) => setLocalConfig(prev => ({
+                                        ...prev,
+                                        deadlines: { ...prev.deadlines, finalDeadline: e.target.value }
+                                    }))}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gov-lightBlue outline-none"
+                                />
+                                <Calendar size={18} className="absolute left-3 top-2.5 text-gray-400" />
+                            </div>
+                            <p className="text-xs text-gray-500">
+                                Data limite para consolidação e envio do relatório final para órgãos de controle.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="bg-orange-50 border border-orange-100 rounded-lg p-4 flex items-center justify-between">
+                         <div className="flex gap-3">
+                            <div className="bg-orange-100 p-2 rounded-full h-10 w-10 flex items-center justify-center text-orange-600">
+                                <AlertTriangle size={20} />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-gray-800">Banner de Contagem Regressiva</h4>
+                                <p className="text-xs text-gray-600">
+                                    Exibir um alerta visual no topo de todas as páginas informando quantos dias restam para o prazo setorial?
+                                </p>
+                            </div>
+                         </div>
+                         
+                         <button 
+                            onClick={() => setLocalConfig(prev => ({
+                                ...prev,
+                                deadlines: { ...prev.deadlines, showBanner: !prev.deadlines.showBanner }
+                            }))}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                localConfig.deadlines?.showBanner ? 'bg-green-500' : 'bg-gray-200'
+                            }`}
+                        >
+                            <span className="sr-only">Toggle banner</span>
+                            <span
+                                aria-hidden="true"
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    localConfig.deadlines?.showBanner ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                            />
+                        </button>
+                    </div>
+                 </div>
+
+                 <div className="flex justify-end pt-4 border-t border-gray-100">
+                    <button 
+                        onClick={saveIdentity}
+                        className="px-6 py-2 bg-gov-blue text-white rounded-lg shadow hover:bg-blue-800 font-bold flex items-center gap-2"
+                    >
+                        <Save size={18} /> Salvar Alterações
+                    </button>
+                </div>
+            </div>
         )}
 
         {/* TAB 2: SECTORS */}
